@@ -450,7 +450,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif re.match(r'^[A-Za-z]{4}0[A-Za-z0-9]{6}$', text):
         await do_search_ifsc(update, ctx, text)
 
-# --- SEARCH EXECUTORS ---
+# --- SEARCH EXECUTORS (No Refund) ---
 async def do_search_num(update, ctx, num):
     user_id = update.effective_user.id
     msg = await update.message.reply_text(f"🔍 **Searching Number** `{num}`...", parse_mode="Markdown")
@@ -459,8 +459,8 @@ async def do_search_num(update, ctx, num):
     
     res = fetch_num(get_setting('num_api'), num)
     if not res:
-        adjust_credits(user_id, 1)
-        return await msg.edit_text("❌ **Data Not Found.** Credit refunded.", parse_mode="Markdown")
+        # REFUND HATA DIYA HAI
+        return await msg.edit_text("❌ **Data Not Found.**", parse_mode="Markdown")
     
     out = f"🕵️‍♂️ **DATA FOUND**\n**Number:** `{num}`\n\n"
     for i, r in enumerate(res['results'][:3], 1):
@@ -478,8 +478,7 @@ async def do_search_aadhar(update, ctx, num):
     
     res = fetch_num(get_setting('aadhar_api'), num)
     if not res:
-        adjust_credits(user_id, 1)
-        return await msg.edit_text("❌ **Data Not Found.** Credit refunded.", parse_mode="Markdown")
+        return await msg.edit_text("❌ **Data Not Found.**", parse_mode="Markdown")
     
     out = f"🕵️‍♂️ **AADHAR FOUND**\n\n"
     for i, r in enumerate(res['results'][:3], 1):
@@ -497,8 +496,7 @@ async def do_search_tg(update, ctx, tid):
     
     res = fetch_tg(tid)
     if not res:
-        adjust_credits(user_id, 1)
-        return await msg.edit_text("❌ **Data Not Found.** Credit refunded.", parse_mode="Markdown")
+        return await msg.edit_text("❌ **Data Not Found.**", parse_mode="Markdown")
     
     out = f"✈️ **TG DATA FOUND**\n🆔 **TG ID:** `{tid}`\n\n"
     phones = res.get("phone", [])
@@ -517,8 +515,7 @@ async def do_search_ifsc(update, ctx, code):
     
     res = fetch_ifsc(code)
     if not res:
-        adjust_credits(user_id, 1)
-        return await msg.edit_text("❌ **Data Not Found.** Credit refunded.", parse_mode="Markdown")
+        return await msg.edit_text("❌ **Data Not Found.**", parse_mode="Markdown")
     
     out = f"🏦 **IFSC INFO**\n\n🔢 **Code:** `{code}`\n"
     bank_data = res.get("data", {})
@@ -532,71 +529,4 @@ async def do_search_ifsc(update, ctx, code):
 
 # --- BUTTON CALLBACKS ---
 async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    user_id = update.effective_user.id
-
-    if data == "verify_join":
-        await verify_join(update, ctx)
-    elif data.startswith("buy_"):
-        points = data.split("_")[1]
-        prices = {"10": 30, "25": 70, "50": 130, "100": 250}
-        price = prices.get(points, 0)
-        
-        await query.message.edit_text(
-            f"✅ **Request Sent!**\n\n💎 **Plan:** {points} Credits\n💰 **Price:** ₹{price}\n\n"
-            f"Contact <b>{OWNER_USERNAME}</b> to pay and get credits.", 
-            parse_mode="HTML"
-        )
-        try:
-            await ctx.bot.send_message(
-                SUPER_ADMIN_ID, 
-                f"🔔 **New Buy Request!**\nUser ID: `{user_id}`\nPlan: {points} CR\nPrice: ₹{price}", 
-                parse_mode="Markdown"
-            )
-        except: pass
-    elif data.startswith("history_"):
-        target_uid = data.split("_")[1]
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        c.execute("SELECT search_type, search_query, search_date FROM search_history WHERE user_id=? ORDER BY id DESC LIMIT 15", (target_uid,))
-        history = c.fetchall()
-        conn.close()
-
-        if not history:
-            await query.answer("No history found for this user.", show_alert=True)
-            return
-
-        text = f"╭━━━━━━━━━━━━━━━━━━╮\n   🟣 *{scp('HISTORY')}* 🟣\n╰━━━━━━━━━━━━━━━━━━╯\n\n"
-        text += f"👤 User ID: `{target_uid}`\n\n"
-        for h in history:
-            text += f"🔹 **{h[0]}:** `{h[1]}`\n   📅 _{h[2]}_\n\n"
-        
-        await query.message.edit_text(text, parse_mode="Markdown")
-
-# --- APP SETUP ---
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-    
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("admin", admin_command))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    
-    # Admin Keyboard Handlers
-    app.add_handler(MessageHandler(filters.Regex("^🟢 💎 ᴀᴅᴅ ᴘᴏɪɴᴛꜱ$"), admin_add_credits_start))
-    app.add_handler(MessageHandler(filters.Regex("^🔴 ❌ ʀᴇᴍᴏᴠᴇ ᴘᴏɪɴᴛꜱ$"), admin_remove_credits_start))
-    app.add_handler(MessageHandler(filters.Regex("^🔴 🚫 ʙᴀɴ ᴜꜱᴇʀ$"), admin_ban_start))
-    app.add_handler(MessageHandler(filters.Regex("^🟢 ✅ ᴜɴʙᴀɴ ᴜꜱᴇʀ$"), admin_unban_start))
-    app.add_handler(MessageHandler(filters.Regex("^🟡 📣 ʙʀᴏᴀᴅᴄᴀꜱᴛ$"), admin_broadcast_start))
-    app.add_handler(MessageHandler(filters.Regex("^🔵 📊 ꜱᴛᴀᴛꜱ$"), admin_stats))
-    app.add_handler(MessageHandler(filters.Regex("^🟣 📊 ʀᴇᴄᴏʀᴅꜱ$"), admin_records))
-    app.add_handler(MessageHandler(filters.Regex("^🔵 ⚙️ ᴀᴘɪ ꜱᴛᴀᴛᴜꜱ$"), admin_api_status))
-    
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    print("[*] Ultimate Pro Max Bot is running...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+    query = update
