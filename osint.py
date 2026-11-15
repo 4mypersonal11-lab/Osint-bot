@@ -8,12 +8,12 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 # --- TERA CONFIG ---
-BOT_TOKEN = "8925056785:AAFND7fUvLnX5M5hYXmzxZyNl9Uc7_h5AKs" 
+BOT_TOKEN = "8925056785:AAHfyM8UIpdOdbnenQbeik4JF-Z74HGaIpQ" 
 SUPER_ADMIN_ID = 8786686789  
 OWNER_USERNAME = "@heart_of_public" # Tera asli username
 CHANNEL_1 = "@biggest_4_public" 
 CHANNEL_2 = "@sufiyanr31" 
-
+c.execute('''CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)''')
 # --- APIs ---
 DEFAULT_NUM_API = "https://sra-num-aadhar-info-api-main-two.vercel.app/search?q="
 DEFAULT_AADHAR_API = "https://sra-num-aadhar-info-api-main-rose.vercel.app/search?q="
