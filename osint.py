@@ -10,7 +10,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 # --- TERA CONFIG ---
 BOT_TOKEN = "8925056785:AAFND7fUvLnX5M5hYXmzxZyNl9Uc7_h5AKs" # Tera Token
 SUPER_ADMIN_ID = 8786686789  # Teri Admin ID
-OWNER_USERNAME = "@heart_of_public" # Tera Username
+OWNER_USERNAME = "<b>@heart_of_public</b>"" # Tera Username
 CHANNEL_1 = "@biggest_4_public" # Tera Channel 1
 CHANNEL_2 = "@sufiyanr31" # Tera Channel 2
 
