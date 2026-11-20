@@ -12,7 +12,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 # --- TERA CONFIG ---
-BOT_TOKEN = "8925056785:AAFwAAYtvbdSNRc1K69egLiZTvt4Ar0NTJE" 
+BOT_TOKEN = "8925056785:AAGlI7iIew5bfcrxFebmhg00-0DD8b9NnR8" 
 SUPER_ADMIN_ID = 8786686789  
 OWNER_USERNAME = "@heart_of_public" 
 CHANNEL_1 = "@biggest_4_public" 
