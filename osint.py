@@ -408,7 +408,7 @@ async def do_search_tg(update, ctx, tid):
     await msg.edit_text(out, parse_mode="Markdown")
     asyncio.create_task(auto_delete_message(ctx, update.effective_chat.id, msg.message_id))
 
-# --- BUTTON CALLBACKS ---
+# --- UNIFIED CALLBACK HANDLER (Fixes Approval Issue) ---
 async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     data = query.data; user_id = update.effective_user.id
@@ -446,7 +446,22 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         for h in history: text += f"🔹 **{h[0]}:** `{h[1]}`\n   📅 _{h[2]}_\n\n"
         await query.message.edit_text(text, parse_mode="Markdown")
 
-# --- SCREENSHOT & APPROVAL ---
+    # --- ADMIN APPROVAL (FIXED HERE) ---
+    elif data.startswith("approve_"):
+        _, uid, cr = data.split("_")
+        adjust_credits(int(uid), int(cr))
+        try: await ctx.bot.send_message(int(uid), f"🎉 **Congratulations!**\n\nYour payment was approved. **{cr} Credits** have been added to your account.\n\n💎 **Check your balance:** /start", parse_mode="Markdown")
+        except: pass
+        await query.edit_message_caption(caption=f"✅ **APPROVED**\nUser: `{uid}`\nCredits: {cr}", reply_markup=None, parse_mode="Markdown")
+        
+    elif data.startswith("reject_"):
+        _, uid = data.split("_")
+        kb = [[InlineKeyboardButton("👑 Contact Owner", url=f"https://t.me/{OWNER_USERNAME.replace('@', '')}")]]
+        try: await ctx.bot.send_message(int(uid), "❌ **Rejected by Owner.**\n\nContact owner for help.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        except: pass
+        await query.edit_message_caption(caption=f"❌ **REJECTED**\nUser: `{uid}`", reply_markup=None, parse_mode="Markdown")
+
+# --- SCREENSHOT HANDLER ---
 async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = ctx.user_data.get('awaiting_screenshot')
@@ -469,34 +484,15 @@ async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Error sending to admin: {e}", parse_mode="Markdown")
 
-# --- ADMIN APPROVAL LOGIC ---
-async def admin_approval_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; await query.answer()
-    data = query.data
-    
-    if data.startswith("approve_"):
-        _, uid, cr = data.split("_")
-        adjust_credits(int(uid), int(cr))
-        try: await ctx.bot.send_message(int(uid), f"🎉 **Congratulations!**\n\nYour payment was approved. **{cr} Credits** have been added to your account.\n\n💎 **Check your balance:** /start", parse_mode="Markdown")
-        except: pass
-        await query.edit_message_caption(caption=f"✅ **APPROVED**\nUser: `{uid}`\nCredits: {cr}", reply_markup=None, parse_mode="Markdown")
-        
-    elif data.startswith("reject_"):
-        _, uid = data.split("_")
-        kb = [[InlineKeyboardButton("👑 Contact Owner", url=f"https://t.me/{OWNER_USERNAME.replace('@', '')}")]]
-        try: await ctx.bot.send_message(int(uid), "❌ **Rejected by Owner.**\n\nContact owner for help.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-        except: pass
-        await query.edit_message_caption(caption=f"❌ **REJECTED**\nUser: `{uid}`", reply_markup=None, parse_mode="Markdown")
-
 # --- APP SETUP ---
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_command))
+    
+    # Single Handler for all buttons
     app.add_handler(CallbackQueryHandler(button_handler))
-    # Note: Approval Handler must be before Text Handler
-    app.add_handler(CallbackQueryHandler(admin_approval_handler, pattern="^(approve_|reject_)"))
     
     app.add_handler(MessageHandler(filters.Regex("^🟢 💎 ADD POINTS$"), admin_add_credits_start))
     app.add_handler(MessageHandler(filters.Regex("^🔴 ❌ REMOVE POINTS$"), admin_remove_credits_start))
