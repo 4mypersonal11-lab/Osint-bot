@@ -36,10 +36,10 @@ AUTO_DELETE_SECONDS = 30
 
 # --- PLANS ---
 PLANS = {
-    "10": {"credits": 10, "price": 50},
-    "25": {"credits": 25, "price": 125},
-    "50": {"credits": 50, "price": 249},
-    "100": {"credits": 100, "price": 399},
+    "10": {"credits": 10, "price": 30},
+    "25": {"credits": 25, "price": 70},
+    "50": {"credits": 50, "price": 130},
+    "100": {"credits": 100, "price": 250},
 }
 
 # --- TEXT FORMATTING ---
@@ -235,6 +235,7 @@ async def admin_unban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def admin_broadcast_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
+    ctx.user_data['awaiting_broadcast'] = True
     await update.message.reply_text("📣 **Broadcast**\n\nType the message to send to all users.", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
 
 async def admin_change_api_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -273,7 +274,7 @@ async def admin_api_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except: pass
     await msg.edit_text(f"⚙️ *API STATUS* ⚙️\n\n📱 *Number API:* {num_status}\n🆔 *Aadhar API:* {aadhar_status}", parse_mode="Markdown")
 
-# --- BROADCAST LOGIC FIX ---
+# --- BROADCAST LOGIC ---
 async def process_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     msg = update.message
@@ -286,10 +287,9 @@ async def process_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     
     for (uid,) in users:
         try:
-            # Copy message to keep media/text formatting
             await msg.copy(chat_id=uid)
             success += 1
-            await asyncio.sleep(0.05) # Avoid Telegram rate limits
+            await asyncio.sleep(0.1) # Rate limit protection
         except Exception:
             failed += 1
             
@@ -301,7 +301,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if is_banned(user_id): return
 
-    # Admin Broadcast Trigger
     if is_admin(user_id) and ctx.user_data.get('awaiting_broadcast'):
         ctx.user_data['awaiting_broadcast'] = False
         return await process_broadcast(update, ctx)
@@ -329,8 +328,8 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # --- BUY CREDITS & QR CODE ---
     if text == "🟢 🛒 BUY CREDITS":
         kb = [
-            [InlineKeyboardButton("💎 10 CR - ₹50", callback_data="buy_10"), InlineKeyboardButton("💎 25 CR - ₹125", callback_data="buy_25")],
-            [InlineKeyboardButton("💎 50 CR - ₹249", callback_data="buy_50"), InlineKeyboardButton("💎 100 CR - ₹399", callback_data="buy_100")],
+            [InlineKeyboardButton("💎 10 CR - ₹30", callback_data="buy_10"), InlineKeyboardButton("💎 25 CR - ₹70", callback_data="buy_25")],
+            [InlineKeyboardButton("💎 50 CR - ₹130", callback_data="buy_50"), InlineKeyboardButton("💎 100 CR - ₹250", callback_data="buy_100")],
             [InlineKeyboardButton("👑 Contact Owner (Custom)", url=f"https://t.me/{OWNER_USERNAME.replace('@', '')}?text=I%20want%20custom%20credits")]
         ]
         return await update.message.reply_text("🛒 **BUY CREDITS**\n\nSelect a plan below:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -348,7 +347,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if user[5] == 1: return await update.message.reply_text("⚠️ **Aap ek hi ID ko refer kar sakte hain.**", reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
         else: return await update.message.reply_text(f"🔗 **Your Referral Link:**\n`https://t.me/{bot_info.username}?start={user_id}`\n\nShare and get 2 credits per join!", reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
 
-    # --- PROMPTS ---
     if text in ["🟢 📱 NUMBER INFO", "🔵 🆔 AADHAAR INFO", "🟣 ✈️ TG TO NUMBER", "🟠 👨‍👩‍👧‍👦 FAMILY INFO", "🔴 🏦 IFSC CODE"]:
         if not await is_user_joined(update, ctx): return
         if get_user(user_id)[0] <= 0: return await send_no_credit_msg(update, ctx)
@@ -361,7 +359,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         }[text]
         return await update.message.reply_text(msg, reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
 
-    # --- ADMIN BUTTON TEXT HANDLERS ---
     if is_admin(user_id):
         if text == "👑 ADMIN PANEL": return await admin_command(update, ctx)
         elif text == "♾️ UNLIMITED CREDITS":
@@ -449,7 +446,6 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("buy_"):
         plan = PLANS.get(data.split("_")[1])
         if plan:
-            # Generate QR Code
             upi_url = f"upi://pay?pa={UPI_ID}&pn={UPI_NAME.replace(' ', '%20')}&am={plan['price']}&cu=INR&tn=Buy%20Credits"
             qr = qrcode.make(upi_url)
             bio = BytesIO(); qr.save(bio, 'PNG'); bio.seek(0)
@@ -472,7 +468,7 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         for h in history: text += f"🔹 **{h[0]}:** `{h[1]}`\n   📅 _{h[2]}_\n\n"
         await query.message.edit_text(text, parse_mode="Markdown")
 
-# --- SCREENSHOT HANDLER ---
+# --- SCREENSHOT HANDLER & APPROVAL ---
 async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = ctx.user_data.get('awaiting_screenshot')
@@ -482,14 +478,47 @@ async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     photo_file_id = update.message.photo[-1].file_id
     user_name = update.effective_user.username or update.effective_user.first_name
     
-    # Send to Admin
-    admin_msg = f"🧾 **NEW PAYMENT SCREENSHOT**\n\n👤 User: {user_name}\n🆔 ID: `{user_id}`\n💎 Plan: {data['credits']} Credits\n💵 Amount: ₹{data['price']}\n\n👇 Please verify and add credits."
-    kb = [[InlineKeyboardButton("✅ Add Credits", callback_data=f"add_{user_id}_{data['credits']}")]]
+    # Send to Admin with Approve/Reject Buttons
+    admin_msg = f"🧾 **NEW PAYMENT SCREENSHOT**\n\n👤 User: {user_name}\n🆔 ID: `{user_id}`\n💎 Plan: {data['credits']} Credits\n💵 Amount: ₹{data['price']}\n\n👇 Please verify payment."
+    
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Approve", callback_data=f"app_{user_id}_{data['credits']}"), 
+         InlineKeyboardButton("❌ Reject", callback_data=f"rej_{user_id}")]
+    ])
+    
     try:
-        await ctx.bot.send_photo(chat_id=SUPER_ADMIN_ID, photo=photo_file_id, caption=admin_msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        await ctx.bot.send_photo(chat_id=SUPER_ADMIN_ID, photo=photo_file_id, caption=admin_msg, reply_markup=kb, parse_mode="Markdown")
         await update.message.reply_text("✅ **Screenshot sent to admin!**\n\nWait for approval, credits will be added soon.", reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
     except Exception as e:
         await update.message.reply_text(f"❌ Error sending to admin: {e}", parse_mode="Markdown")
+
+# --- ADMIN CALLBACKS (Approve / Reject) ---
+async def admin_approval_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    
+    if data.startswith("app_"):
+        _, uid, cr = data.split("_")
+        adjust_credits(int(uid), int(cr))
+        
+        # Notify User
+        try:
+            await ctx.bot.send_message(int(uid), f"✅ **Payment Approved!**\n\n{cr} Credits have been added to your account.\n💎 Check your balance.", parse_mode="Markdown")
+        except: pass
+        
+        await query.edit_message_caption(caption=f"✅ **APPROVED**\nUser: `{uid}`\nCredits: {cr}\n\nPayment verified successfully.", reply_markup=None, parse_mode="Markdown")
+        
+    elif data.startswith("rej_"):
+        _, uid = data.split("_")
+        
+        # Notify User with Owner Link
+        kb = [[InlineKeyboardButton("👑 Contact Owner", url=f"https://t.me/{OWNER_USERNAME.replace('@', '')}")]]
+        try:
+            await ctx.bot.send_message(int(uid), "❌ **Payment Rejected**\n\nYour payment could not be verified. Please contact owner for help.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        except: pass
+        
+        await query.edit_message_caption(caption=f"❌ **REJECTED**\nUser: `{uid}`\n\nPayment rejected.", reply_markup=None, parse_mode="Markdown")
 
 # --- APP SETUP ---
 def main():
@@ -498,8 +527,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CallbackQueryHandler(admin_approval_handler, pattern="^(app_|rej_)"))
     
-    # Admin Keyboard
     app.add_handler(MessageHandler(filters.Regex("^🟢 💎 ADD POINTS$"), admin_add_credits_start))
     app.add_handler(MessageHandler(filters.Regex("^🔴 ❌ REMOVE POINTS$"), admin_remove_credits_start))
     app.add_handler(MessageHandler(filters.Regex("^🔴 🚫 BAN USER$"), admin_ban_start))
@@ -510,7 +539,6 @@ def main():
     app.add_handler(MessageHandler(filters.Regex("^🔵 ⚙️ API STATUS$"), admin_api_status))
     app.add_handler(MessageHandler(filters.Regex("^🟠 🔗 CHANGE API$"), admin_change_api_start))
     
-    # Text Handler
     app.add_handler(MessageHandler(filters.PHOTO, handle_screenshot))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
