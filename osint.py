@@ -28,9 +28,6 @@ DEFAULT_NUM_API = "https://sra-num-aadhar-info-api-main-two.vercel.app/search?q=
 DEFAULT_AADHAR_API = "https://sra-num-aadhar-info-api-main-rose.vercel.app/search?q="
 TG_NUM_API_URL = "https://tele-to-phone.felixrdx.xyz/api/developer/Cyb3rB4nn3r/fast"
 TG_NUM_API_KEY = "ba76fa0f97264dea84364ca1df91a2e8"
-AADHAAR_FAMILY_API = "https://addhartofam.fuckyoubitch.workers.dev/family"
-IFSC_API_URL = "https://authapisellhub.shop/api.php"
-IFSC_API_KEY = "c8511bdd2cef1cc5507372a5a2afaabafd47265f841e5da95ea3540b9f07d8e6"
 
 AUTO_DELETE_SECONDS = 30
 
@@ -61,7 +58,6 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS banned_users (user_id INTEGER PRIMARY KEY)''')
     c.execute('''CREATE TABLE IF NOT EXISTS search_history (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, search_type TEXT, search_query TEXT, search_date TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS src_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, status TEXT DEFAULT 'pending', created_at TEXT)''')
     conn.commit()
     c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (SUPER_ADMIN_ID,))
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('num_api', ?)", (DEFAULT_NUM_API,))
@@ -150,18 +146,11 @@ def fetch_tg(tg_id):
         return r if r.get("status") == True else None
     except: return None
 
-def fetch_ifsc(ifsc):
-    try:
-        r = requests.get(f"{IFSC_API_URL}?api_key={IFSC_API_KEY}&service=ifsc_info&input={ifsc}", timeout=25).json()
-        return r if r.get("success") == True else None
-    except: return None
-
 # --- KEYBOARDS ---
 def get_main_keyboard(user_id):
     kb = [
         [KeyboardButton("🟢 📱 NUMBER INFO"), KeyboardButton("🔵 🆔 AADHAAR INFO")],
         [KeyboardButton("🟣 ✈️ TG TO NUMBER"), KeyboardButton("🟠 👨‍👩‍👧‍👦 FAMILY INFO")],
-        [KeyboardButton("🔴 🏦 IFSC CODE")],
         [KeyboardButton("🟡 💰 BALANCE"), KeyboardButton("🟢 🛒 BUY CREDITS")],
         [KeyboardButton("💻 ʙᴜʏ sᴏᴜʀᴄᴇ ᴄᴏᴅᴇ"), KeyboardButton("🔵 🔗 REFERRAL")]
     ]
@@ -178,7 +167,6 @@ def get_admin_keyboard():
         [KeyboardButton("♾️ UNLIMITED CREDITS")],
         [KeyboardButton("🔴 🚫 BAN USER"), KeyboardButton("🟢 ✅ UNBAN USER")],
         [KeyboardButton("🟣 📊 RECORDS"), KeyboardButton("🔵 ⚙️ API STATUS")],
-        [KeyboardButton("💻 sʀᴄ ʀᴇǫᴜᴇsᴛs"), KeyboardButton("🟠 🔗 CHANGE API")],
         [KeyboardButton("🏠 MAIN MENU")]
     ]
     return ReplyKeyboardMarkup(kb, resize_keyboard=True)
@@ -238,10 +226,6 @@ async def admin_broadcast_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data['awaiting_broadcast'] = True
     await update.message.reply_text("📣 **Broadcast**\n\nType the message to send to all users.", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
 
-async def admin_change_api_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id): return
-    await update.message.reply_text("🔗 **API Settings**\n\nTo change Number API: `setnumapi URL`\nTo change Aadhar API: `setaadharapi URL`", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
-
 async def admin_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     conn = sqlite3.connect('users.db'); c = conn.cursor()
@@ -289,7 +273,7 @@ async def process_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         try:
             await msg.copy(chat_id=uid)
             success += 1
-            await asyncio.sleep(0.1) # Rate limit protection
+            await asyncio.sleep(0.1)
         except Exception:
             failed += 1
             
@@ -308,13 +292,15 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if text in ["🔴 🚫 CANCEL", "🏠 MAIN MENU"]:
         return await start(update, ctx)
 
+    # Admin commands (Ban/Unban handle properly)
     if is_admin(user_id):
         try:
             parts = text.split()
             if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
                 adjust_credits(int(parts[0]), int(parts[1]))
                 return await update.message.reply_text(f"✅ Added {parts[1]} credits to `{parts[0]}`", reply_markup=get_admin_keyboard(), parse_mode="Markdown")
-            elif len(parts) == 1 and parts[0].isdigit():
+            elif len(parts) == 1 and parts[0].isdigit() and ctx.user_data.get('awaiting_ban'):
+                ctx.user_data['awaiting_ban'] = False
                 conn = sqlite3.connect('users.db')
                 conn.execute("INSERT OR IGNORE INTO banned_users (user_id) VALUES (?)", (int(parts[0]),))
                 conn.commit(); conn.close()
@@ -325,7 +311,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         user = get_user(user_id)
         return await update.message.reply_text(f"💎 **Balance:** {user[0]} Credits\n🔍 **Searches:** {user[1]}", reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
 
-    # --- BUY CREDITS & QR CODE ---
+    # --- BUY CREDITS ---
     if text == "🟢 🛒 BUY CREDITS":
         kb = [
             [InlineKeyboardButton("💎 10 CR - ₹30", callback_data="buy_10"), InlineKeyboardButton("💎 25 CR - ₹70", callback_data="buy_25")],
@@ -347,39 +333,42 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if user[5] == 1: return await update.message.reply_text("⚠️ **Aap ek hi ID ko refer kar sakte hain.**", reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
         else: return await update.message.reply_text(f"🔗 **Your Referral Link:**\n`https://t.me/{bot_info.username}?start={user_id}`\n\nShare and get 2 credits per join!", reply_markup=get_main_keyboard(user_id), parse_mode="Markdown")
 
-    if text in ["🟢 📱 NUMBER INFO", "🔵 🆔 AADHAAR INFO", "🟣 ✈️ TG TO NUMBER", "🟠 👨‍👩‍👧‍👦 FAMILY INFO", "🔴 🏦 IFSC CODE"]:
+    # --- PROMPTS ---
+    if text in ["🟢 📱 NUMBER INFO", "🔵 🆔 AADHAAR INFO", "🟣 ✈️ TG TO NUMBER", "🟠 👨‍👩‍👧‍👦 FAMILY INFO"]:
         if not await is_user_joined(update, ctx): return
         if get_user(user_id)[0] <= 0: return await send_no_credit_msg(update, ctx)
         msg = {
-            "🟢 📱 NUMBER INFO": "📱 **Send 10-digit Mobile Number:**\nExample: `99999...`",
+            "🟢 📱 NUMBER INFO": "📱 **Send 10-digit Mobile Number:**\nExample: `9999911111`",
             "🔵 🆔 AADHAAR INFO": "🆔 **Send 12-digit Aadhaar:**\nExample: `123456789012`",
             "🟣 ✈️ TG TO NUMBER": "✈️ **Send Telegram ID:**\nExample: `8518042438`",
-            "🟠 👨‍👩‍👧‍👦 FAMILY INFO": "👨‍👩‍👧‍👦 **Send 12-digit Aadhaar:**\nExample: `123456789012`",
-            "🔴 🏦 IFSC CODE": "🏦 **Send IFSC Code:**\nExample: `SBIN0000300`"
+            "🟠 👨‍👩‍👧‍👦 FAMILY INFO": "👨‍👩‍👧‍👦 **Send 12-digit Aadhaar:**\nExample: `123456789012`"
         }[text]
         return await update.message.reply_text(msg, reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
 
+    # --- ADMIN BUTTONS ---
     if is_admin(user_id):
         if text == "👑 ADMIN PANEL": return await admin_command(update, ctx)
         elif text == "♾️ UNLIMITED CREDITS":
             adjust_credits(user_id, 9999999)
             return await update.message.reply_text("♾️ **Unlimited Credits Added!**", reply_markup=get_admin_keyboard())
-        elif text == "🟠 🔗 CHANGE API": return await admin_change_api_start(update, ctx)
         elif text == "🟣 📊 RECORDS": return await admin_records(update, ctx)
         elif text == "🔵 📊 STATS": return await admin_stats(update, ctx)
         elif text == "🔵 ⚙️ API STATUS": return await admin_api_status(update, ctx)
         elif text == "🟢 💎 ADD POINTS": return await admin_add_credits_start(update, ctx)
         elif text == "🔴 ❌ REMOVE POINTS": return await admin_remove_credits_start(update, ctx)
-        elif text == "🔴 🚫 BAN USER": return await admin_ban_start(update, ctx)
+        elif text == "🔴 🚫 BAN USER": 
+            ctx.user_data['awaiting_ban'] = True
+            return await admin_ban_start(update, ctx)
         elif text == "🟢 ✅ UNBAN USER": return await admin_unban_start(update, ctx)
         elif text == "🟡 📣 BROADCAST": return await admin_broadcast_start(update, ctx)
 
     # --- EXECUTION LOGIC ---
     clean_text = text.replace(" ", "").replace("-", "").strip()
+    
+    # Numbers execute logic
     if clean_text.isdigit() and len(clean_text) == 10: await do_search_num(update, ctx, clean_text)
     elif clean_text.isdigit() and len(clean_text) == 12: await do_search_aadhar(update, ctx, clean_text)
     elif clean_text.isdigit() and len(clean_text) < 15: await do_search_tg(update, ctx, clean_text)
-    elif re.match(r'^[A-Za-z]{4}0[A-Za-z0-9]{6}$', text): await do_search_ifsc(update, ctx, text)
 
 # --- SEARCH EXECUTORS ---
 async def do_search_num(update, ctx, num):
@@ -423,20 +412,6 @@ async def do_search_tg(update, ctx, tid):
     await msg.edit_text(out, parse_mode="Markdown")
     asyncio.create_task(auto_delete_message(ctx, update.effective_chat.id, msg.message_id))
 
-async def do_search_ifsc(update, ctx, code):
-    user_id = update.effective_user.id
-    if get_user(user_id)[0] <= 0: return await send_no_credit_msg(update, ctx)
-    msg = await update.message.reply_text(f"🏦 **Searching IFSC** `{code}`...", parse_mode="Markdown")
-    deduct_credit(user_id); log_search(user_id, "IFSC", code)
-    res = fetch_ifsc(code)
-    if not res: return await msg.edit_text("❌ **Data Not Found.**", parse_mode="Markdown")
-    out = f"🏦 **IFSC INFO**\n\n🔢 **Code:** `{code}`\n"
-    for k, v in res.get("data", {}).items():
-        out += f"🏛️ **Bank:** {v.get('bank')}\n🏢 **Branch:** {v.get('branch')}\n📍 **Address:** {v.get('address')}\n"; break
-    out += f"\n💳 **Left:** {get_user(user_id)[0]}\n⏱️ _Auto-deletes in 30s_"
-    await msg.edit_text(out, parse_mode="Markdown")
-    asyncio.create_task(auto_delete_message(ctx, update.effective_chat.id, msg.message_id))
-
 # --- BUTTON CALLBACKS ---
 async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
@@ -468,7 +443,7 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         for h in history: text += f"🔹 **{h[0]}:** `{h[1]}`\n   📅 _{h[2]}_\n\n"
         await query.message.edit_text(text, parse_mode="Markdown")
 
-# --- SCREENSHOT HANDLER & APPROVAL ---
+# --- SCREENSHOT & APPROVAL ---
 async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = ctx.user_data.get('awaiting_screenshot')
@@ -478,13 +453,8 @@ async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     photo_file_id = update.message.photo[-1].file_id
     user_name = update.effective_user.username or update.effective_user.first_name
     
-    # Send to Admin with Approve/Reject Buttons
     admin_msg = f"🧾 **NEW PAYMENT SCREENSHOT**\n\n👤 User: {user_name}\n🆔 ID: `{user_id}`\n💎 Plan: {data['credits']} Credits\n💵 Amount: ₹{data['price']}\n\n👇 Please verify payment."
-    
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Approve", callback_data=f"app_{user_id}_{data['credits']}"), 
-         InlineKeyboardButton("❌ Reject", callback_data=f"rej_{user_id}")]
-    ])
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Approve", callback_data=f"app_{user_id}_{data['credits']}"), InlineKeyboardButton("❌ Reject", callback_data=f"rej_{user_id}")]])
     
     try:
         await ctx.bot.send_photo(chat_id=SUPER_ADMIN_ID, photo=photo_file_id, caption=admin_msg, reply_markup=kb, parse_mode="Markdown")
@@ -494,31 +464,22 @@ async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # --- ADMIN CALLBACKS (Approve / Reject) ---
 async def admin_approval_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     data = query.data
     
     if data.startswith("app_"):
         _, uid, cr = data.split("_")
         adjust_credits(int(uid), int(cr))
-        
-        # Notify User
-        try:
-            await ctx.bot.send_message(int(uid), f"✅ **Payment Approved!**\n\n{cr} Credits have been added to your account.\n💎 Check your balance.", parse_mode="Markdown")
+        try: await ctx.bot.send_message(int(uid), f"✅ **Payment Approved!**\n\n{cr} Credits added to your account.", parse_mode="Markdown")
         except: pass
-        
-        await query.edit_message_caption(caption=f"✅ **APPROVED**\nUser: `{uid}`\nCredits: {cr}\n\nPayment verified successfully.", reply_markup=None, parse_mode="Markdown")
+        await query.edit_message_caption(caption=f"✅ **APPROVED**\nUser: `{uid}`\nCredits: {cr}", reply_markup=None, parse_mode="Markdown")
         
     elif data.startswith("rej_"):
         _, uid = data.split("_")
-        
-        # Notify User with Owner Link
         kb = [[InlineKeyboardButton("👑 Contact Owner", url=f"https://t.me/{OWNER_USERNAME.replace('@', '')}")]]
-        try:
-            await ctx.bot.send_message(int(uid), "❌ **Payment Rejected**\n\nYour payment could not be verified. Please contact owner for help.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        try: await ctx.bot.send_message(int(uid), "❌ **Payment Rejected**\n\nContact owner for help.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
         except: pass
-        
-        await query.edit_message_caption(caption=f"❌ **REJECTED**\nUser: `{uid}`\n\nPayment rejected.", reply_markup=None, parse_mode="Markdown")
+        await query.edit_message_caption(caption=f"❌ **REJECTED**\nUser: `{uid}`", reply_markup=None, parse_mode="Markdown")
 
 # --- APP SETUP ---
 def main():
@@ -537,7 +498,6 @@ def main():
     app.add_handler(MessageHandler(filters.Regex("^🔵 📊 STATS$"), admin_stats))
     app.add_handler(MessageHandler(filters.Regex("^🟣 📊 RECORDS$"), admin_records))
     app.add_handler(MessageHandler(filters.Regex("^🔵 ⚙️ API STATUS$"), admin_api_status))
-    app.add_handler(MessageHandler(filters.Regex("^🟠 🔗 CHANGE API$"), admin_change_api_start))
     
     app.add_handler(MessageHandler(filters.PHOTO, handle_screenshot))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
