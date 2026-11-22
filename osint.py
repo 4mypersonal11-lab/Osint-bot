@@ -12,7 +12,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 # --- TERA CONFIG ---
-BOT_TOKEN = "8925056785:AAG9nWFNuFgRWPOGIvIsILdkDeweX1APzuU" 
+BOT_TOKEN = "8925056785:AAFwAAYtvbdSNRc1K69egLiZTvt4Ar0NTJE" 
 SUPER_ADMIN_ID = 8786686789  
 OWNER_USERNAME = "@heart_of_public" 
 CHANNEL_1 = "@biggest_4_public" 
@@ -292,7 +292,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if text in ["🔴 🚫 CANCEL", "🏠 MAIN MENU"]:
         return await start(update, ctx)
 
-    # Admin commands (Ban/Unban handle properly)
     if is_admin(user_id):
         try:
             parts = text.split()
@@ -365,7 +364,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # --- EXECUTION LOGIC ---
     clean_text = text.replace(" ", "").replace("-", "").strip()
     
-    # Numbers execute logic
     if clean_text.isdigit() and len(clean_text) == 10: await do_search_num(update, ctx, clean_text)
     elif clean_text.isdigit() and len(clean_text) == 12: await do_search_aadhar(update, ctx, clean_text)
     elif clean_text.isdigit() and len(clean_text) < 15: await do_search_tg(update, ctx, clean_text)
