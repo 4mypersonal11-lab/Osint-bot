@@ -257,7 +257,7 @@ async def admin_api_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except: pass
     await msg.edit_text(f"⚙️ *API STATUS* ⚙️\n\n📱 *Number API:* {num_status}\n🆔 *Aadhar API:* {aadhar_status}", parse_mode="Markdown")
 
-# --- BROADCAST & MANUAL ADD LOGIC ---
+# --- BROADCAST LOGIC ---
 async def process_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     msg = update.message
@@ -284,35 +284,25 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if is_banned(user_id): return
 
-    # Admin Broadcast or Manual Add logic
-    if is_admin(user_id):
-        if ctx.user_data.get('awaiting_broadcast'):
-            ctx.user_data['awaiting_broadcast'] = False
-            return await process_broadcast(update, ctx)
-            
-        if ctx.user_data.get('manual_add_id'):
-            target_id = ctx.user_data.get('manual_add_id')
-            try:
-                amt = int(text.strip())
-                adjust_credits(target_id, amt)
-                await update.message.reply_text(f"✅ Added {amt} credits to User `{target_id}`!", reply_markup=get_admin_keyboard(), parse_mode="Markdown")
-                try: await ctx.bot.send_message(target_id, f"✅ **Payment Approved!**\n\n{amt} Credits added to your account.", parse_mode="Markdown")
-                except: pass
-                del ctx.user_data['manual_add_id']
-            except:
-                await update.message.reply_text("❌ Invalid Amount. Send a valid number.", reply_markup=get_admin_keyboard())
-            return
+    # Admin Broadcast Logic
+    if is_admin(user_id) and ctx.user_data.get('awaiting_broadcast'):
+        ctx.user_data['awaiting_broadcast'] = False
+        return await process_broadcast(update, ctx)
 
     if text in ["🔴 🚫 CANCEL", "🏠 MAIN MENU"]:
         return await start(update, ctx)
 
-    # Admin Buttons (Normal Text)
+    # Admin Text Parsing (Add/Remove/Ban)
     if is_admin(user_id):
         try:
             parts = text.split()
             if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                adjust_credits(int(parts[0]), int(parts[1]))
-                return await update.message.reply_text(f"✅ Added {parts[1]} credits to `{parts[0]}`", reply_markup=get_admin_keyboard(), parse_mode="Markdown")
+                uid, amt = int(parts[0]), int(parts[1])
+                adjust_credits(uid, amt)
+                await update.message.reply_text(f"✅ Added {amt} credits to `{uid}`", reply_markup=get_admin_keyboard(), parse_mode="Markdown")
+                try: await ctx.bot.send_message(uid, f"🎉 **Congratulations!**\n\nAdmin has added **{amt} Credits** to your account.\n\n💎 **Check your balance:** /start", parse_mode="Markdown")
+                except: pass
+                return
         except: pass
 
     if text == "🟡 💰 BALANCE":
@@ -469,9 +459,8 @@ async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     admin_msg = f"🧾 **NEW PAYMENT SCREENSHOT**\n\n👤 User: {user_name}\n🆔 ID: `{user_id}`\n💎 Plan: {data['credits']} Credits\n💵 Amount: ₹{data['price']}\n\n👇 Please verify payment."
     
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Auto Add Credits", callback_data=f"app_auto_{user_id}_{data['credits']}")],
-        [InlineKeyboardButton("✍️ Manual Add Credits", callback_data=f"app_manual_{user_id}")],
-        [InlineKeyboardButton("❌ Reject", callback_data=f"rej_{user_id}")]
+        [InlineKeyboardButton("✅ Approve", callback_data=f"approve_{user_id}_{data['credits']}")],
+        [InlineKeyboardButton("❌ Reject", callback_data=f"reject_{user_id}")]
     ])
     
     try:
@@ -485,19 +474,14 @@ async def admin_approval_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query; await query.answer()
     data = query.data
     
-    if data.startswith("app_auto_"):
-        _, _, uid, cr = data.split("_")
+    if data.startswith("approve_"):
+        _, uid, cr = data.split("_")
         adjust_credits(int(uid), int(cr))
-        try: await ctx.bot.send_message(int(uid), f"✅ **Payment Approved!**\n\n{cr} Credits added to your account.", parse_mode="Markdown")
+        try: await ctx.bot.send_message(int(uid), f"🎉 **Congratulations!**\n\nYour payment was approved. **{cr} Credits** have been added to your account.\n\n💎 **Check your balance:** /start", parse_mode="Markdown")
         except: pass
-        await query.edit_message_caption(caption=f"✅ **APPROVED (Auto)**\nUser: `{uid}`\nCredits: {cr}", reply_markup=None, parse_mode="Markdown")
+        await query.edit_message_caption(caption=f"✅ **APPROVED**\nUser: `{uid}`\nCredits: {cr}", reply_markup=None, parse_mode="Markdown")
         
-    elif data.startswith("app_manual_"):
-        _, _, uid = data.split("_")
-        ctx.user_data['manual_add_id'] = int(uid)
-        await query.message.reply_text(f"✍️ **Manual Add Credits for User `{uid}`**\n\nSend amount: `AMOUNT` (Example: `50`)", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
-        
-    elif data.startswith("rej_"):
+    elif data.startswith("reject_"):
         _, uid = data.split("_")
         kb = [[InlineKeyboardButton("👑 Contact Owner", url=f"https://t.me/{OWNER_USERNAME.replace('@', '')}")]]
         try: await ctx.bot.send_message(int(uid), "❌ **Rejected by Owner.**\n\nContact owner for help.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -512,7 +496,7 @@ def main():
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CallbackQueryHandler(button_handler))
     # Note: Approval Handler must be before Text Handler
-    app.add_handler(CallbackQueryHandler(admin_approval_handler, pattern="^(app_|rej_)"))
+    app.add_handler(CallbackQueryHandler(admin_approval_handler, pattern="^(approve_|reject_)"))
     
     app.add_handler(MessageHandler(filters.Regex("^🟢 💎 ADD POINTS$"), admin_add_credits_start))
     app.add_handler(MessageHandler(filters.Regex("^🔴 ❌ REMOVE POINTS$"), admin_remove_credits_start))
