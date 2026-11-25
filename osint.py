@@ -10,25 +10,26 @@ from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-# --- TERA CONFIG ---
-BOT_TOKEN = "8925056785:AAG9nWFNuFgRWPOGIvIsILdkDeweX1APzuU" 
-SUPER_ADMIN_ID = 8786686789  
-OWNER_USERNAME = "@heart_of_public" 
-CHANNEL_1 = "@biggest_4_public" 
-CHANNEL_2 = "@sufiyanr31" 
+# --- READING FROM RAILWAY VARIABLES ---
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_FALLBACK_TOKEN")
+SUPER_ADMIN_ID = int(os.getenv("SUPER_ADMIN_ID", "8786686789"))
+OWNER_USERNAME = os.getenv("OWNER_USERNAME", "@heart_of_public")
+CHANNEL_1 = os.getenv("CHANNEL_1", "@biggest_4_public")
+CHANNEL_2 = os.getenv("CHANNEL_2", "@sufiyanr31")
+UPI_ID = os.getenv("UPI_ID", "trillionadillllxyz@fam")
+UPI_NAME = os.getenv("UPI_NAME", "Mohammad Adil")
+SRC_PRICE = int(os.getenv("SRC_PRICE", "1499"))
+TG_NUM_API_URL = os.getenv("TG_NUM_API_URL", "https://tele-to-phone.felixrdx.xyz/api/developer/Cyb3rB4nn3r/fast")
+TG_NUM_API_KEY = os.getenv("TG_NUM_API_KEY", "ba76fa0f97264dea84364ca1df91a2e8")
+AADHAAR_FAMILY_API = os.getenv("AADHAAR_FAMILY_API", "https://addhartofam.fuckyoubitch.workers.dev/family")
+IFSC_API_URL = os.getenv("IFSC_API_URL", "https://authapisellhub.shop/api.php")
+IFSC_API_KEY = os.getenv("IFSC_API_KEY", "c8511bdd2cef1cc5507372a5a2afaabafd47265f841e5da95ea3540b9f07d8e6")
+DEFAULT_NUM_API = os.getenv("DEFAULT_NUM_API", "https://sra-num-aadhar-info-api-main-two.vercel.app/search?q=")
+DEFAULT_AADHAR_API = os.getenv("DEFAULT_AADHAR_API", "https://sra-num-aadhar-info-api-main-rose.vercel.app/search?q=")
+AUTO_DELETE_SECONDS = int(os.getenv("AUTO_DELETE_SECONDS", "30"))
 
-# --- PAYMENT CONFIG ---
-UPI_ID = "trillionadillllxyz@fam" 
-UPI_NAME = "Mohammad Adil"
-SRC_PRICE = 1499
-
-# --- APIs ---
-DEFAULT_NUM_API = "https://sra-num-aadhar-info-api-main-two.vercel.app/search?q="
-DEFAULT_AADHAR_API = "https://sra-num-aadhar-info-api-main-rose.vercel.app/search?q="
-TG_NUM_API_URL = "https://tele-to-phone.felixrdx.xyz/api/developer/Cyb3rB4nn3r/fast"
-TG_NUM_API_KEY = "ba76fa0f97264dea84364ca1df91a2e8"
-
-AUTO_DELETE_SECONDS = 30
+# --- APNE GROUP KA LINK YAHAN DAAL (Agar description me chahiye) ---
+SUPPORT_GROUP_LINK = "https://t.me/your_group_link" 
 
 # --- PLANS ---
 PLANS = {
@@ -257,7 +258,7 @@ async def admin_api_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except: pass
     await msg.edit_text(f"⚙️ *API STATUS* ⚙️\n\n📱 *Number API:* {num_status}\n🆔 *Aadhar API:* {aadhar_status}", parse_mode="Markdown")
 
-# --- BROADCAST LOGIC ---
+# --- BROADCAST & MANUAL ADD LOGIC ---
 async def process_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     msg = update.message
@@ -284,15 +285,26 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if is_banned(user_id): return
 
-    # Admin Broadcast Logic
     if is_admin(user_id) and ctx.user_data.get('awaiting_broadcast'):
         ctx.user_data['awaiting_broadcast'] = False
         return await process_broadcast(update, ctx)
 
+    if is_admin(user_id) and ctx.user_data.get('manual_add_id'):
+        target_id = ctx.user_data.get('manual_add_id')
+        try:
+            amt = int(text.strip())
+            adjust_credits(target_id, amt)
+            await update.message.reply_text(f"✅ Added {amt} credits to User `{target_id}`!", reply_markup=get_admin_keyboard(), parse_mode="Markdown")
+            try: await ctx.bot.send_message(target_id, f"✅ **Payment Approved!**\n\n{amt} Credits added to your account.", parse_mode="Markdown")
+            except: pass
+            del ctx.user_data['manual_add_id']
+        except:
+            await update.message.reply_text("❌ Invalid Amount. Send a valid number.", reply_markup=get_admin_keyboard())
+        return
+
     if text in ["🔴 🚫 CANCEL", "🏠 MAIN MENU"]:
         return await start(update, ctx)
 
-    # Admin Text Parsing (Add/Remove/Ban)
     if is_admin(user_id):
         try:
             parts = text.split()
@@ -354,8 +366,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         elif text == "🔵 ⚙️ API STATUS": return await admin_api_status(update, ctx)
         elif text == "🟢 💎 ADD POINTS": return await admin_add_credits_start(update, ctx)
         elif text == "🔴 ❌ REMOVE POINTS": return await admin_remove_credits_start(update, ctx)
-        elif text == "🔴 🚫 BAN USER": 
-            return await admin_ban_start(update, ctx)
+        elif text == "🔴 🚫 BAN USER": return await admin_ban_start(update, ctx)
         elif text == "🟢 ✅ UNBAN USER": return await admin_unban_start(update, ctx)
         elif text == "🟡 📣 BROADCAST": return await admin_broadcast_start(update, ctx)
 
@@ -408,7 +419,7 @@ async def do_search_tg(update, ctx, tid):
     await msg.edit_text(out, parse_mode="Markdown")
     asyncio.create_task(auto_delete_message(ctx, update.effective_chat.id, msg.message_id))
 
-# --- UNIFIED CALLBACK HANDLER (Fixes Approval Issue) ---
+# --- BUTTON CALLBACKS ---
 async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     data = query.data; user_id = update.effective_user.id
@@ -446,7 +457,7 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         for h in history: text += f"🔹 **{h[0]}:** `{h[1]}`\n   📅 _{h[2]}_\n\n"
         await query.message.edit_text(text, parse_mode="Markdown")
 
-    # --- ADMIN APPROVAL (FIXED HERE) ---
+    # --- ADMIN APPROVAL ---
     elif data.startswith("approve_"):
         _, uid, cr = data.split("_")
         adjust_credits(int(uid), int(cr))
@@ -484,9 +495,19 @@ async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Error sending to admin: {e}", parse_mode="Markdown")
 
+# --- BOT POST INIT (SETS DESCRIPTION WITH GROUP LINK) ---
+async def post_init(application: Application):
+    try:
+        description_text = f"🔥 Welcome to Premium OSINT Bot!\n\nJoin our Support Group for help:\n{SUPPORT_GROUP_LINK}"
+        await application.bot.set_my_description(description=description_text)
+        await application.bot.set_my_short_description(short_description="Premium OSINT Bot")
+        print("[*] Bot Description Updated with Group Link!")
+    except Exception as e:
+        print(f"Error updating bio: {e}")
+
 # --- APP SETUP ---
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_command))
