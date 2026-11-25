@@ -28,6 +28,9 @@ DEFAULT_NUM_API = os.getenv("DEFAULT_NUM_API", "https://sra-num-aadhar-info-api-
 DEFAULT_AADHAR_API = os.getenv("DEFAULT_AADHAR_API", "https://sra-num-aadhar-info-api-main-rose.vercel.app/search?q=")
 AUTO_DELETE_SECONDS = int(os.getenv("AUTO_DELETE_SECONDS", "30"))
 
+# --- TERA ASLI GROUP LINK YAHAN DAAL ---
+YOUR_GROUP_LINK = "https://t.me/+KOjknYWGPvtkOWQx"
+
 # --- PLANS ---
 PLANS = {
     "10": {"credits": 10, "price": 30},
@@ -255,7 +258,7 @@ async def admin_api_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except: pass
     await msg.edit_text(f"⚙️ *API STATUS* ⚙️\n\n📱 *Number API:* {num_status}\n🆔 *Aadhar API:* {aadhar_status}", parse_mode="Markdown")
 
-# --- BROADCAST & MANUAL ADD LOGIC ---
+# --- BROADCAST LOGIC ---
 async def process_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     msg = update.message
@@ -285,19 +288,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if is_admin(user_id) and ctx.user_data.get('awaiting_broadcast'):
         ctx.user_data['awaiting_broadcast'] = False
         return await process_broadcast(update, ctx)
-
-    if is_admin(user_id) and ctx.user_data.get('manual_add_id'):
-        target_id = ctx.user_data.get('manual_add_id')
-        try:
-            amt = int(text.strip())
-            adjust_credits(target_id, amt)
-            await update.message.reply_text(f"✅ Added {amt} credits to User `{target_id}`!", reply_markup=get_admin_keyboard(), parse_mode="Markdown")
-            try: await ctx.bot.send_message(target_id, f"✅ **Payment Approved!**\n\n{amt} Credits added to your account.", parse_mode="Markdown")
-            except: pass
-            del ctx.user_data['manual_add_id']
-        except:
-            await update.message.reply_text("❌ Invalid Amount. Send a valid number.", reply_markup=get_admin_keyboard())
-        return
 
     if text in ["🔴 🚫 CANCEL", "🏠 MAIN MENU"]:
         return await start(update, ctx)
@@ -492,9 +482,21 @@ async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Error sending to admin: {e}", parse_mode="Markdown")
 
+# --- DESCRIPTION CLEANER (ANTI-SPAM) ---
+async def force_set_description(application: Application):
+    try:
+        # Jaisi hi bot start hogi, ye purana spam link hata kar aapka group link laga dega
+        description_text = f"🔥 Welcome to Premium OSINT Bot!\n\nJoin our Support Group for help:\n{YOUR_GROUP_LINK}"
+        await application.bot.set_my_description(description=description_text)
+        await application.bot.set_my_short_description(short_description="Premium OSINT Bot")
+        print("[*] Description successfully forced and spam removed!")
+    except Exception as e:
+        print(f"Description update error: {e}")
+
 # --- APP SETUP ---
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    # Yahan humne .post_init(force_set_description) add kar diya hai
+    app = Application.builder().token(BOT_TOKEN).post_init(force_set_description).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_command))
@@ -516,13 +518,4 @@ def main():
     app.run_polling()
 
 if __name__ == "__main__":
-    # --- DESCRIPTION CLEANER FUNCTION ---
-async def clear_bad_description(application: Application):
-    try:
-        # Ye bot start hote hi description aur about ko khali kar dega
-        await application.bot.set_my_description(description="")
-        await application.bot.set_my_short_description(short_description="")
-        print("[*] Bad description cleared successfully!")
-    except Exception as e:
-        print(f"Error clearing description: {e}")
     main()
