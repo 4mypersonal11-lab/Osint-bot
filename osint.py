@@ -28,9 +28,6 @@ DEFAULT_NUM_API = os.getenv("DEFAULT_NUM_API", "https://sra-num-aadhar-info-api-
 DEFAULT_AADHAR_API = os.getenv("DEFAULT_AADHAR_API", "https://sra-num-aadhar-info-api-main-rose.vercel.app/search?q=")
 AUTO_DELETE_SECONDS = int(os.getenv("AUTO_DELETE_SECONDS", "30"))
 
-# --- APNE GROUP KA LINK YAHAN DAAL (Agar description me chahiye) ---
-SUPPORT_GROUP_LINK = "https://t.me/your_group_link" 
-
 # --- PLANS ---
 PLANS = {
     "10": {"credits": 10, "price": 30},
@@ -495,24 +492,12 @@ async def handle_screenshot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Error sending to admin: {e}", parse_mode="Markdown")
 
-# --- BOT POST INIT (SETS DESCRIPTION WITH GROUP LINK) ---
-async def post_init(application: Application):
-    try:
-        description_text = f"🔥 Welcome to Premium OSINT Bot!\n\nJoin our Support Group for help:\n{SUPPORT_GROUP_LINK}"
-        await application.bot.set_my_description(description=description_text)
-        await application.bot.set_my_short_description(short_description="Premium OSINT Bot")
-        print("[*] Bot Description Updated with Group Link!")
-    except Exception as e:
-        print(f"Error updating bio: {e}")
-
 # --- APP SETUP ---
 def main():
-    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    app = Application.builder().token(BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_command))
-    
-    # Single Handler for all buttons
     app.add_handler(CallbackQueryHandler(button_handler))
     
     app.add_handler(MessageHandler(filters.Regex("^🟢 💎 ADD POINTS$"), admin_add_credits_start))
