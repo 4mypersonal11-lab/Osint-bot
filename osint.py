@@ -516,4 +516,13 @@ def main():
     app.run_polling()
 
 if __name__ == "__main__":
+    # --- DESCRIPTION CLEANER FUNCTION ---
+async def clear_bad_description(application: Application):
+    try:
+        # Ye bot start hote hi description aur about ko khali kar dega
+        await application.bot.set_my_description(description="")
+        await application.bot.set_my_short_description(short_description="")
+        print("[*] Bad description cleared successfully!")
+    except Exception as e:
+        print(f"Error clearing description: {e}")
     main()
